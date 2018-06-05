@@ -1,6 +1,8 @@
 ﻿Imports System.Runtime.InteropServices
 
 Public Class Frm_Main
+
+#Region "WinAPI"
     Const HWND_TOPMOST = -1
     Const HWND_NOTOPMOST = -2
     Const SWP_NOSIZE = &H1
@@ -21,60 +23,140 @@ Public Class Frm_Main
     End Function
 
     <DllImport("user32.dll", SetLastError:=True)>
-    Public Shared Function GetSystemMetrics(ByVal nIndex As Int32) As Int32
+    Public Shared Function IsWindowVisible(ByVal hWnd As IntPtr) As Boolean
     End Function
 
+    <DllImport("user32.dll", SetLastError:=True)>
+    Public Shared Function IsIconic(ByVal hWnd As IntPtr) As Boolean
+    End Function
 
-    Public Const MONITORINFOF_PRIMARY = &H1
-    Public Const MONITOR_DEFAULTTONEAREST = &H2
-    Public Const MONITOR_DEFAULTTONULL = &H0
-    Public Const MONITOR_DEFAULTTOPRIMARY = &H1
-    Public Structure RECT
-        Dim Left As Long
-        Dim Top As Long
-        Dim Right As Long
-        Dim Bottom As Long
+    <DllImport("user32.dll", SetLastError:=True)>
+    Public Shared Function GetWindowRect(ByVal hWnd As IntPtr, ByRef lpRect As RECT) As Boolean
+    End Function
+
+    'Private Structure RECT
+    '    Dim left As Long
+    '    Dim top As Long
+    '    Dim right As Long
+    '    Dim bottom As Long
+    '    Overrides Function ToString() As String
+    '        Return "{left: " & left & "; top: " & top & "; right: " & right & "; bottom: " & bottom & "}"
+    '    End Function
+    'End Structure
+
+    <StructLayout(LayoutKind.Sequential)> Public Structure RECT
+        Dim Left As Integer
+        Dim Top As Integer
+        Dim Right As Integer
+        Dim Bottom As Integer
+        Overrides Function ToString() As String
+            Return "{left: " & Left & "; top: " & Top & "; right: " & Right & "; bottom: " & Bottom & "}"
+        End Function
     End Structure
-    Structure MONITORINFO
-        Dim cbSize As Integer
-        Dim rcMonitor As RECT
-        Dim rcWork As RECT
-        Dim dwFlags As Long
-    End Structure
-    Public Structure POINT
-        Dim x As Long
-        Dim y As Long
-    End Structure
+#End Region
 
-    <DllImport("user32.dll", SetLastError:=True)>
-    Public Shared Function EnumDisplayMonitors(ByVal hdc As IntPtr, ByRef lprcClip As IntPtr, ByVal lpfnEnum As IntPtr, ByVal dwData As IntPtr) As Boolean
-    End Function
+    Private procList As New Collection()
 
-    <DllImport("user32.dll", SetLastError:=True)>
-    Public Shared Function GetMonitorInfo(ByVal hMonitor As Long, ByRef lpmi As MONITORINFO) As Boolean
-    End Function
+    Private Sub Frm_Main_Load(sender As Object, e As EventArgs) Handles MyBase.Load
 
-    <DllImport("user32.dll", SetLastError:=True)>
-    Public Shared Function MonitorFromPoint(ByVal x As Long, ByVal y As Long, ByVal dwFlags As Long) As Long
-    End Function
+        loadUIProcesses()
+        resizeWorkSpace()
+        testSub()
 
-    <DllImport("user32.dll", SetLastError:=True)>
-    Public Shared Function MonitorFromRect(ByRef lprc As RECT, ByVal dwFlags As Long) As Long
-    End Function
+    End Sub
 
-    <DllImport("user32.dll", SetLastError:=True)>
-    Public Shared Function MonitorFromWindow(ByVal hwnd As IntPtr, ByVal dwFlags As IntPtr) As Long
-    End Function
+    Private Sub resizeWorkSpace()
+        addLogEntry("<resizeWorkSpace>")
+        Dim virtualScreenSize As Size = SystemInformation.VirtualScreen.Size
+        addLogEntry("VirtualScreenSize = " & virtualScreenSize.ToString)
+        pnl_workspace.Width = tp_main.Width
+        pnl_workspace.Height = virtualScreenSize.Height * (pnl_workspace.Width / virtualScreenSize.Width)
+        pnl_workspace.Location = New Point(0, tp_main.Height / 2 - pnl_workspace.Height / 2)
+        Dim g As Graphics = pnl_workspace.CreateGraphics
+        Dim screenIndex As Integer = 1
+        For Each s As Screen In Screen.AllScreens
+            addLogEntry("ScreenIndex: " & screenIndex)
+            addLogEntry("DeviceName: " & s.DeviceName.ToString)
+            addLogEntry("ScreenBounds: " & s.Bounds.ToString)
+            addLogEntry("WorkingArea: " & s.WorkingArea.ToString)
 
-    <DllImport("user32.dll", SetLastError:=True)>
-    Public Shared Function GetWindowRect(ByVal hwnd As Long, lpRect As RECT) As Long
-    End Function
+            Dim drawingRect As New Rectangle(s.Bounds.X * (pnl_workspace.Width / virtualScreenSize.Width), s.Bounds.Y * (pnl_workspace.Height / virtualScreenSize.Height), s.Bounds.Width * (pnl_workspace.Width / virtualScreenSize.Width), s.Bounds.Height * (pnl_workspace.Height / virtualScreenSize.Height))
 
-    <DllImport("kernel32.dll", SetLastError:=True)>
-    Public Shared Function GetLastError() As Integer
-    End Function
+            g.FillRectangle(Brushes.Red, drawingRect)
+            screenIndex += 1
+        Next
+
+        addLogEntry("</resizeWorkSpace>")
+    End Sub
+
+    Private Sub loadUIProcesses()
+        addLogEntry("<loadUIProcesses>")
+        procList.Clear()
+        addLogEntry("procList [cleared]")
+        For Each p As Process In Process.GetProcesses
+            If IsWindowVisible(p.MainWindowHandle) Then 'OrElse IsIconic(p.MainWindowHandle) Then
+                Try
+                    procList.Add(p, p.Id)
+                    addLogEntry("procList [added " & p.Id & " | " & p.ProcessName & "]")
+                Catch ex As Exception
+                    addLogEntry("procList [ERROR " & p.Id & " | " & p.ProcessName & "]")
+                End Try
+            End If
+        Next
+        addLogEntry("procList [count " & procList.Count & "]")
+        addLogEntry("</loadUIProcesses>")
+    End Sub
+
+    Private Sub testSub()
+        addLogEntry("Monitors detected: " & SystemInformation.MonitorCount)
+
+        Dim screenIndex As Integer = 1
+        For Each s As Screen In Screen.AllScreens
+            addLogEntry("ScreenIndex: " & screenIndex)
+            addLogEntry("DeviceName: " & s.DeviceName.ToString)
+            addLogEntry("ScreenBounds: " & s.Bounds.ToString)
+            addLogEntry("WorkingArea: " & s.WorkingArea.ToString)
+
+            screenIndex += 1
+        Next
+
+        Dim rect As Rectangle = Screen.GetWorkingArea(Me)
+        addLogEntry(rect.ToString)
+        addLogEntry(My.Computer.Screen.WorkingArea.ToString)
+        addLogEntry("Screensize: " & SystemInformation.VirtualScreen.Size.ToString)
+
+        'addLogEntry("Software running:")
+        'For Each p As Process In Process.GetProcesses
+        '    If IsWindowVisible(p.MainWindowHandle) Then 'OrElse IsIconic(p.MainWindowHandle) Then
+        '        addLogEntry(p.ProcessName & " " & p.Id)
+        '        Dim o As New RECT
+        '        GetWindowRect(p.MainWindowHandle, o)
+        '        addLogEntry(o.ToString)
+        '        procList.Add(p, p.Id)
+        '    End If
+        'Next
+
+    End Sub
+
+    Private Delegate Sub addLogEntryCallback(ByVal s As String)
+    Private Sub addLogEntry(ByVal s As String)
+        If lb_log.InvokeRequired Then
+            lb_log.Invoke(New addLogEntryCallback(AddressOf addLogEntry), s)
+        Else
+            lb_log.Items.Add(Now.ToLongTimeString & " > " & s)
+        End If
+    End Sub
+
+    Private Sub Button2_Click(sender As Object, e As EventArgs)
+
+        Dim p As Process = Process.GetCurrentProcess
+        Dim o As New RECT
+        GetWindowRect(p.MainWindowHandle, o)
+        addLogEntry(o.ToString)
+    End Sub
 
     Private Sub Button1_Click(sender As Object, e As EventArgs)
+        'Move specific processes to position
         For Each p As Process In Process.GetProcesses
             If p.ProcessName.ToLower.Contains("discord") Then
                 ShowWindow(p.MainWindowHandle, 1)
@@ -86,33 +168,4 @@ Public Class Frm_Main
             End If
         Next
     End Sub
-
-    Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-        'MsgBox("Monitore: " & GetSystemMetrics(SM_CMONITORS) & vbCrLf & "X: " & GetSystemMetrics(SM_CXVIRTUALSIZE) & vbCrLf & "Y: " & GetSystemMetrics(SM_CYVIRTUALSIZE))
-
-        Dim rect As Rectangle = Screen.GetWorkingArea(Me)
-        addItem(rect.ToString)
-        addItem(My.Computer.Screen.WorkingArea.ToString)
-
-        addItem(EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, Marshal.GetFunctionPointerForDelegate(New MonitorEnumProcCallback(AddressOf MonitorEnumProc)), IntPtr.Zero))
-
-        addItem("LastError: " & Marshal.GetLastWin32Error)
-
-    End Sub
-
-    Public Delegate Function MonitorEnumProcCallback(ByVal hMonitor As IntPtr, ByVal hdcMonitor As IntPtr, ByVal lprcMonitor As RECT, ByVal dwData As IntPtr) As Boolean
-    Public Shared Function MonitorEnumProc(ByVal hMonitor As IntPtr, ByVal hdcMonitor As IntPtr, lprcMonitor As RECT, ByVal dwData As IntPtr) As Boolean
-        MsgBox("Test")
-        Return True
-    End Function
-
-    Private Delegate Sub addItemCallback(ByVal s As String)
-    Private Sub addItem(ByVal s As String)
-        If ListBox1.InvokeRequired Then
-            ListBox1.Invoke(New addItemCallback(AddressOf addItem), s)
-        Else
-            ListBox1.Items.Add(s)
-        End If
-    End Sub
-
 End Class
